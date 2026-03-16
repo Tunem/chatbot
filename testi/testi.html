@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<body>
+    <button onclick="testaaYhteys()">Testaa yhteys bottiin</button>
+    <p id="tulos"></p>
+
+    <script>
+        async function testaaYhteys() {
+            const formData = new FormData();
+            formData.append('viesti', 'Moi PHP!');
+
+            const vastaus = await fetch('testi.php', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await vastaus.json();
+            document.getElementById('tulos').innerText = data.vastaus + " (Klo: " + data.aika + ")";
+        }
+    </script>
+</body>
+</html>
