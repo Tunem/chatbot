@@ -93,6 +93,49 @@ function haeSaaVastaus($kaupunki) {
     exit;
 }
 
+// Apufunktio kääntämiseen (LibreTranslate)
+function kaannaSuomeksi($teksti) {
+    $url_mymemory = "https://api.mymemory.translated.net/get?q=" . urlencode($teksti) . "&langpair=en|fi";
+    
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url_mymemory);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+
+    $res = curl_exec($ch);
+    $data = json_decode($res, true);
+
+    if (isset($data['responseData']['translatedText'])) {
+        return $data['responseData']['translatedText'];
+    }
+    // Jos kääntäminen epäonnistuu, palautetaan alkuperäinen teksti ja pieni huomautus
+    return $teksti . " (Käännös ei onnistunut juuri nyt)";
+}
+
+// Apufunktio vitsin hakuun
+function haeVitsi($kieli) {
+    $url = "https://official-joke-api.appspot.com/random_joke";
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    $res = curl_exec($ch);
+    $vitsi = json_decode($res, true);
+
+    if (!isset($vitsi['setup'])) return json_encode(['reply' => "Vitsipankki on jumissa! 🤡"]);
+
+    $alku = $vitsi['setup'];
+    $loppu = $vitsi['punchline'];
+
+    if ($kieli === 'fi') {
+        $alku = kaannaSuomeksi($alku);
+        $loppu = kaannaSuomeksi($loppu);
+    }
+
+    $vastaus = "<strong>$alku</strong><br><br>... $loppu 😂";
+    return json_encode(['reply' => $vastaus]);
+}
+
 // === SYÖTTEEN VASTAANOTTO ===
 // Haetaan viesti JavaScriptiltä
 $input = mb_strtolower($_POST['message'] ?? '');
@@ -195,22 +238,17 @@ foreach ($salaliitto_sanat as $sana) {
 }
 
 // 7. Vitsit
-$vitsi_sanat = ['vitsi', 'naurata', 'hauska'];
-foreach ($vitsi_sanat as $sana) {
-    if (str_contains($input, $sana)) {
-        unset($_SESSION['odottaa_lahdetta']); // Nollataan uutistila jos pyydät vitsiä
+// Käsitellään kielivalinta
+if ($input === 'vitsi_fi') { echo haeVitsi('fi'); exit; }
+if ($input === 'vitsi_en') { echo haeVitsi('en'); exit; }
 
-        $vitsit = [
-            "Miksi tietokone meni lääkäriin? - Sillä oli virus!",
-            "Mitä eroa on tietokoneella ja kesälomalla? - Kesälomalla ei ole windowsia.",
-            "Miksi ohjelmoijat pitävät pimeästä? - Koska valo paljastaa bugit!",
-            "Mitä pilvi sanoi toiselle? - 'Oletko kuullut, että meistä tallennetaan nykyään kaikki data?'",
-            "Miksi CSS-kehittäjä lähti ravintolasta? - Hän ei löytänyt oikeaa pöytää (table).",
-            "Mitä koodari tekee, kun hänellä on kylmä? - Hän siirtyy lähemmäs läpivuotoa (memory leak).",
-            "Miksi bitti meni uimaan? - Se halusi tulla tavuksi (byte)."
-        ];
-
-        echo json_encode(['reply' => "<strong>" . $vitsit[array_rand($vitsit)] . "</strong> 😂"]);
+if (str_contains($input, 'vitsi') || str_contains($input, 'naurata')) {
+    // Lähetetään kielivalintakysymys ja erikoiskenttä 'vitsi_napit'
+    if (!str_contains($input, 'vitsi_')) {
+            echo json_encode([
+                'reply' => "Haluatko vitsin suomeksi vai englanniksi?",
+                'vitsi_napit' => true
+            ]);
         exit;
     }
 }

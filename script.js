@@ -16,6 +16,17 @@ function lisaaViesti(teksti, tyyppi) {
     msgContainer.scrollTop = msgContainer.scrollHeight;
 }
 
+// Lisää tämä funktio muiden joukkoon
+function valitseVitsiKieli(kieli) {
+    // Poistetaan napit näkyvistä
+    const nappiAlue = document.getElementById('temp-joke-buttons');
+    if (nappiAlue) nappiAlue.remove();
+    
+    // Lähetetään valinta botille (piilotettu komento)
+    document.getElementById('user-input').value = 'vitsi_' + kieli;
+    lahetaViesti();
+}
+
 // ===== TEEMA =====
 
 function vaihdaTeema() {
@@ -92,6 +103,28 @@ async function lahetaViesti() {
         const data = await vastaus.json();
         if (document.getElementById(latausId)) document.getElementById(latausId).remove();
         lisaaViesti(data.reply, 'bot');
+
+        // --- UUSI LOGIIKKA: VITSI-NAPIT ---
+        if (data.vitsi_napit) {
+            const msgContainer = document.getElementById('messages');
+
+            const nappiKupla = document.createElement('div');
+            nappiKupla.id = 'temp-joke-buttons';
+            nappiKupla.className = 'msg bot'; // Käytetään samoja tyylejä kuin botin viesteissä
+            nappiKupla.style.textAlign = 'center';
+            nappiKupla.style.marginTop = '5px';
+            
+            // Lisätään napit kuplan sisälle
+            nappiKupla.innerHTML = `
+                <div style="margin-bottom: 10px; font-size: 0.9em; opacity: 0.8;">Valitse kieli:</div>
+                <button class="quick-btn" onclick="valitseVitsiKieli('fi')" style="margin: 2px;">🇫🇮 Suomeksi</button>
+                <button class="quick-btn" onclick="valitseVitsiKieli('en')" style="margin: 2px;">🇬🇧 Englanniksi</button>
+            `;
+            
+            msgContainer.appendChild(nappiKupla);
+            msgContainer.scrollTop = msgContainer.scrollHeight;
+        }
+
         if (data.avaa_ohjeet) avaaOhjeet();
     } catch (error) {
         if (document.getElementById(latausId)) document.getElementById(latausId).remove();

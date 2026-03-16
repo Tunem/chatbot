@@ -45,6 +45,14 @@
             <h2>UutisBotti - Päivitykset</h2>
             <hr>
             <div class="loki-lista">
+                <p><strong>v1.7 (16.3.2026)</strong><br>
+                - <b>Dynaamiset vitsit</b>: Official Joke API integraatio.<br>
+                - <b>Älykäs kääntäjä</b>: MyMemory API kääntää vitsit lennosta suomeksi.<br>
+                - <b>Interaktiiviset napit</b>: Kielivalinta katoavilla napeilla.</p>
+
+                <p><strong>v1.6 (12.3.2026)</strong><br>
+                - <b>Kaupunki haku</b>: Säätiedot kaupunkien mukaan.<br>
+
                 <p><strong>v1.5 (12.3.2026)</strong><br>
                 - <b>Dark Mode</b>: Täysi tuki tummalle teemalle ja teemavalinnan pysyvä tallennus evästeisiin.<br>
                 - <b>Koodin optimointi</b>: JavaScriptin suoritusjärjestys korjattu ja evästeiden hallinta vakautettu.</p>
