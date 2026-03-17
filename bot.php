@@ -13,7 +13,7 @@ function haeSaaVastaus($kaupunki) {
     $kaupunki = ucfirst(trim($kaupunki));
 
     // 1. GEOLOKAATIO (Muutetaan kaupunki koordinaateiksi Yr.no:ta varten)
-    $geo_url = "https://nominatim.openstreetmap.org/search?city=" . urlencode($kaupunki) . "&country=finland&format=json&limit=1";
+    $geo_url = "https://nominatim.openstreetmap.org/search?city=" . urlencode($kaupunki) . "&format=json&limit=1";
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $geo_url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -275,60 +275,83 @@ if (str_contains($input, 'lause') || str_contains($input, 'motivaatio')) {
 }
 
 // --- 9. Uutiset — lähteen valinta ---
-if (isset($_SESSION['odottaa_lahdetta'])) {
-    $lahteet = [
-        'yle' => ['url' => 'https://yle.fi/rss/uutiset/paauutiset', 'nimi' => 'Ylen'],
-        'is' => ['url' => 'https://www.is.fi/rss/tuoreimmat.xml', 'nimi' => 'Ilta-Sanomien'],
-        'iltalehti' => ['url' => 'https://www.iltalehti.fi/rss/uutiset.xml', 'nimi' => 'Iltalehden']
+if (str_contains($input, 'uutis') || isset($_SESSION['odottaa_lahdetta'])) {
+    // Määritellään RSS-syötteet
+    $rss_lahteet = [
+        'yle' => ['nimi' => 'Yle', 'url' => 'https://yle.fi/rss/uutiset/tuoreimmat'],
+        'iltasanomat' => ['nimi' => 'Ilta-Sanomat', 'url' => 'https://www.is.fi/rss/tuoreimmat.xml'],
+        'iltalehti' => ['nimi' => 'Iltalehti', 'url' => 'https://www.iltalehti.fi/rss/uutiset.xml'],
+        'kaikki' => ['nimi' => 'Kaikki (High.fi)', 'url' => 'https://high.fi/uutiset/rss']
     ];
 
-    $valittu = null;
-    foreach ($lahteet as $avain => $tiedot) {
+    $valittu_avain = null;
+    foreach ($rss_lahteet as $avain => $tiedot) {
         if (str_contains($input, $avain)) {
-            $valittu = $tiedot;
+            $valittu_avain = $avain;
             break;
         }
     }
 
-    if ($valittu) {
-        unset($_SESSION['odottaa_lahdetta']);
+    if ($input === 'uutiset' && !$valittu_avain) {
+        $_SESSION['odottaa_lahdetta'] = true;
+        echo json_encode(['reply' => "Mistä lähteestä haluaisit uutisia? (<b>Yle</b>, <b>IS</b>, <b>Iltalehti</b> tai <b>Kaikki</b>)"]);
+        exit;
+    }
 
-        $ch = curl_init($valittu['url']);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_USERAGENT, 'UutisBotti/1.2');
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        $rss = simplexml_load_string(curl_exec($ch));
+    // Jos lähdettä ei tunnistettu, käytetään High.fi:tä oletuksena
+    if (!$valittu_avain) $valittu_avain = 'kaikki';
+    unset($_SESSION['odottaa_lahdetta']);
 
-        if ($rss) {
-            $vastaus = "Tässä {$valittu['nimi']} uutisia:<br><ul style='padding-left:20px;'>";
+    $valittu = $rss_lahteet[$valittu_avain];
+
+    // Haetaan RSS-data
+    $ch = curl_init($valittu['url']);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+    curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (UutisBotti/1.8)');
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    $rss_raw = curl_exec($ch);
+
+    if ($rss_raw) {
+        // RSS on XML-muodossa
+        // PUHDISTUS: Poistetaan tyhjät välit ja mahdolliset merkit ennen <?xml -tunnistetta
+        $rss_raw = trim($rss_raw);
+        $alkuPos = strpos($rss_raw, '<?xml');
+        if ($alkuPos !== false && $alkuPos > 0) {
+            $rss_raw = substr($rss_raw, $alkuPos);
+        }
+
+        $xml = simplexml_load_string($rss_raw, 'SimpleXMLElement', LIBXML_NOCDATA);
+        
+        if ($xml && isset($xml->channel->item)) {
+            $vastaus = "<b>{$valittu['nimi']} - Tuoreimmat:</b><br><ul style='padding-left:20px; margin-top:10px;'>";
+            
             for ($i = 0; $i < 5; $i++) {
-                if (!isset($rss->channel->item[$i])) break;
-                $vastaus .= "<li><a href='{$rss->channel->item[$i]->link}' target='_blank'>{$rss->channel->item[$i]->title}</a></li>";
+                if (!isset($xml->channel->item[$i])) break;
+                
+                $item = $xml->channel->item[$i];
+                $title = (string)$item->title;
+                $link = (string)$item->link;
+                
+                $vastaus .= "<li style='margin-bottom:8px;'><a href='{$link}' target='_blank'>{$title}</a></li>";
             }
             $vastaus .= "</ul>";
+            echo json_encode(['reply' => $vastaus]);
         } else {
-            $vastaus = "Uutisten hakeminen epäonnistui. Yritä myöhemmin uudestaan.";
-        } 
-
-    echo json_encode(['reply' => $vastaus]);
-    exit;
-} else {
-    echo json_encode(['reply' => "En tunnistanut lähdettä. Valitse: <b>Yle</b>, <b>IS</b> tai <b>Iltalehti</b>."]);
-    exit;
+            echo json_encode(['reply' => "RSS-syötteen lukeminen epäonnistui. XML-muoto on virheellinen. 📰"]);
+        }
+    } else {
+        echo json_encode(['reply' => "Yhteys uutispalvelimeen epäonnistui. 🌐"]);
     }
+    exit;
 }
+
 
 // 9. Ohjeet
 if (str_contains($input, 'ohjeet')) {
     $vastaus = "Tässä kaikki komennot:";
     echo json_encode(['reply' => $vastaus, 'avaa_ohjeet' => true]);
-    exit;
-}
-
-// 10. Uutispyynnön aloitus
-if (str_contains($input, 'uutis')) {
-    $_SESSION['odottaa_lahdetta'] = true;
-    echo json_encode(['reply' => "Mistä lähteestä haluaisit uutisia? (Yle, IS, Iltalehti)"]);
     exit;
 }
 

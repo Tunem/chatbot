@@ -22,7 +22,10 @@
             </div>
         
         <div id="quick-buttons">
-            <button class="quick-btn" onclick="sendCommand('uutiset')">Uutiset</button>
+            <button class="quick-btn" onclick="sendCommand('uutiset')">Pääuutiset</button>
+            <button class="quick-btn" onclick="sendCommand('uutiset yle')">Yle</button>
+            <button class="quick-btn" onclick="sendCommand('uutiset iltasanomat')">IS</button>
+            <button class="quick-btn" onclick="sendCommand('uutiset iltalehti')">IL</button>
             <button class="quick-btn" onclick="sendCommand('sää')">Sää</button>
             <button class="quick-btn" onclick="sendCommand('vitsi')">Vitsi</button>
             <button class="quick-btn" onclick="sendCommand('lause')">Päivän lause</button>
