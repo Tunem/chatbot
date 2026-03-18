@@ -48,6 +48,19 @@
             <h2>UutisBotti - Päivitykset</h2>
             <hr>
             <div class="loki-lista">
+                <p><strong>v1.9.15 (Nykyinen versio)</strong><br>
+                - <b>Kehittynyt komennonpuhdistus</b>: Estetään useiden päällekkäisten komentojen suorittaminen kerralla.<br>
+                - <b>Sananrajatunnistus</b>: (\b) otettu käyttöön estämään sanojen sekoittuminen muihin sanoihin.</p>
+
+                <p><strong>v1.9.14</strong><br>
+                - <b>Dynaaminen puhdistus</b>: Uutishaun dynaaminen puhdistus, joka poistaa hakusanasta roskasanat kuten "kerro" ja "uutiset" ennen hakua.</p>
+
+                <p><strong>v1.9.13</strong><br>
+                - <b>Google News</b>: Asetettu oletuslähteeksi uutishauille. Otsikoiden siistiminen Google News -hauissa (lähteen erottaminen otsikosta).</p>
+
+                <p><strong>v1.8</strong><br>
+                - <b>Parannettu virheen-/poikkeusten käsittely</b>: Uutishauissa ja lisätty tuki tietyille uutismedioille (Yle, IS, IL) ilman kyselyvaihetta.</p>
+
                 <p><strong>v1.7 (16.3.2026)</strong><br>
                 - <b>Dynaamiset vitsit</b>: Official Joke API integraatio.<br>
                 - <b>Älykäs kääntäjä</b>: MyMemory API kääntää vitsit lennosta suomeksi.<br>

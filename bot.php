@@ -1,12 +1,44 @@
 <?php
 // ============================================================
-// bot.php — UutisBotti v1.5
+// bot.php — UutisBotti
 // ============================================================
 
 // === ALUSTUS ===
 session_start(); // TÄRKEÄ: Mahdollistaa botin "muistin"
 header('Content-Type: application/json');
 date_default_timezone_set('Europe/Helsinki'); // Varmistetaan oikea aika
+
+// Luetaan viesti POST-pyynnöstä. Jos viestiä ei ole, käytetään tyhjää merkkijonoa.
+$input = $_POST['message'] ?? '';
+
+// === Puhdistetaan syöte ja määritellään komennot ===
+$input_clean = mb_strtolower($input);
+// Määritellään pääkategoriat tunnistusta varten
+$on_uutiset = preg_match('/\buutis/i', $input_clean);
+$on_saa = preg_match('/\bsää\b/i', $input_clean); // \b estää esim. "lisää" sanan sekoittumisen
+$on_vitsi = preg_match('/\bvitsi\b/i', $input_clean);
+$on_lause = preg_match('/\b(lause|motivaatio)\b/i', $input_clean);
+
+// LASKURI: Kuinka monta eri komentoa viestissä on?
+$komentoja_yhteensa = (int)$on_uutiset + (int)$on_saa + (int)$on_vitsi + (int)$on_lause;
+
+// ESTO: Jos viestissä on liikaa eri tyyppisiä pyyntöjä
+if ($komentoja_yhteensa > 1) {
+    echo json_encode(['reply' => "Hups! Autoitko vähän: haluatko uutisia, säätä vai vitsin? Tehdään yksi asia kerrallaan. 😊"]);
+    exit;
+}
+
+// Jos viesti on yli 100 merkkiä, se on luultavasti spämmiä tai liian monimutkainen
+if (mb_strlen($input) > 100) {
+    echo json_encode(['reply' => "Viestisi on vähän pitkä, en valitettavasti osaa lukea tarinoita vielä! Kokeile lyhyempää komentoa. 📝"]);
+    exit;
+}
+
+// Estetään kielletyt merkit (esim. koodin syöttöyritykset)
+if (preg_match('/[<>{}[\]]/', $input)) {
+    echo json_encode(['reply' => "Käytit erikoismerkkejä, joita en ymmärrä. Pysytään tekstissä! 🚫"]);
+    exit;
+}
 
 // === APUFUNKTIOT ===
 function haeSaaVastaus($kaupunki) {
@@ -158,25 +190,22 @@ $kayttaja = $_SESSION['kayttaja_nimi'] ?? $_COOKIE['botti_nimi'] ?? null;
 if (preg_match('/(?:nimeni on|olen) ([a-zåäö]+)/i', $input, $osumat)) {
     $nimi = ucfirst($osumat[1]);
     $_SESSION['kayttaja_nimi'] = $nimi;
-
     setcookie('botti_nimi', $nimi, time() + (86400 * 30), "/"); // Tallennetaan myös cookieen, jotta nimi säilyy uudelleenkäynneillä
-
-    echo json_encode(['reply' => "Mukava tutustua, $nimi! Muistan nimesi, vaikka sulkisit selaimen.. 😊"]);
+    echo json_encode(['reply' => "Mukava tutustua, $nimi! Muistan nimesi jatkossa 😊"]);
     exit;
 }
 
 // 2. Nimen unohdus
-if (str_contains($input, 'unohda') && str_contains($input, 'nimi')) {
+if (preg_match('/\bunohda\b/i', $input) && preg_match('/\bnimi\b/i', $input)) {
     unset($_SESSION['kayttaja_nimi']);
     // Poistetaan eväste asettamalla sen erääntymisaika menneisyyteen
     setcookie('botti_nimi', '', time() - 3600, "/");
-    
     echo json_encode(['reply' => "Selvä, olen unohtanut nimesi ja poistanut evästeet. Voit kertoa uuden nimesi milloin vain! 🗑️"]);
     exit;
 }
 
 // 3. Nimen vaihto (ohjaa käyttäjää)
-if (str_contains($input, 'vaihda') && str_contains($input, 'nimi')) {
+if (preg_match('/\bvaihda\b/i', $input) && preg_match('/\bnimi\b/i', $input)) {
     echo json_encode(['reply' => "Sopiihan se! Kerro uusi nimesi muodossa: 'Nimeni on [uusi nimi]'."]);
     exit;
 }
@@ -199,23 +228,17 @@ if (isset($_SESSION['odottaa_kaupunkia'])) {
     exit;
 }
 
-// 5. Tervehdys (Kellonajalla)
-$tervehdys_sanat = ['moi', 'hei', 'terve', 'huomenta'];
-foreach ($tervehdys_sanat as $sana) {
-    if (str_contains($input, $sana)) {
-        unset($_SESSION['odottaa_lahdetta']); // Nollataan uutistila jos tervehditään
+// 4. Tervehdykset (Käytetään säännöllistä lausetta, joka vaatii sanan alun tai kokonaisen sanan)
+if (preg_match('/^(hei|moi|terve|huomenta|iltaa)\b/i', $input)) {
+    $nimi_lisa = $kayttaja ? " " . $kayttaja : "";
+    $tunti = (int)date('H');
+    if ($tunti >= 5 && $tunti < 10) $tervehdys = "Hyvää huomenta$nimi_lisa! 🌅";
+    elseif ($tunti >= 10 && $tunti < 17) $tervehdys = "Hyvää päivää$nimi_lisa! ☀️";
+    elseif ($tunti >= 17 && $tunti < 22) $tervehdys = "Hyvää iltaa$nimi_lisa! 🌙";
+    else $tervehdys = "Hyvää yötä$nimi_lisa! 🌌";
 
-        $nimi_lisa = $kayttaja ? " " . $kayttaja : "";
-        $tunti = (int)date('H');
-
-        if ($tunti >= 5 && $tunti < 10) $tervehdys = "Hyvää huomenta$nimi_lisa! 🌅";
-        elseif ($tunti >= 10 && $tunti < 17) $tervehdys = "Hyvää päivää$nimi_lisa! ☀️";
-        elseif ($tunti >= 17 && $tunti < 22) $tervehdys = "Hyvää iltaa$nimi_lisa! 🌙";
-        else $tervehdys = "Hyvää yötä$nimi_lisa! 🌌";
-
-        echo json_encode(['reply' => "$tervehdys Olen UutisBotti. Kysy uutisia tai säätä!"]);
-        exit;
-    }
+    echo json_encode(['reply' => "$tervehdys Olen UutisBotti. Miten voin auttaa?"]);
+    exit;
 }
 
 // 6. Salaliittoteoriat (Easter Egg)
@@ -253,7 +276,6 @@ if (str_contains($input, 'vitsi') || str_contains($input, 'naurata')) {
     }
 }
 
-
 // 8. Päivän lause ---
 if (str_contains($input, 'lause') || str_contains($input, 'motivaatio')) {
     $ch = curl_init();
@@ -275,37 +297,50 @@ if (str_contains($input, 'lause') || str_contains($input, 'motivaatio')) {
 }
 
 // --- 9. Uutiset — lähteen valinta ---
-if (str_contains($input, 'uutis') || isset($_SESSION['odottaa_lahdetta'])) {
+if ($on_uutiset) {
+    // Sanoja, jotka haluamme poistaa hakusanasta, jotta ne eivät mene Google-hakuun
+    // Huom: Nyt mukana myös "hei", "moi" jne. sananrajoilla (\b)
+    $roskasanoja = [
+        '/\buutiset\b/iu', '/\buutisia\b/iu', '/\bkerro\b/iu', 
+        '/\baiheesta\b/iu', '/\baihe\b/iu', '/\bhei\b/iu', 
+        '/\bmoi\b/iu', '/\bterve\b/iu', '/\bkiitos\b/iu'
+    ];
+    // Puhdistetaan hakusana säännöllisillä lausekkeilla
+    $hakusana = trim(preg_replace($roskasanoja, '', $input_clean));
+
     // Määritellään RSS-syötteet
     $rss_lahteet = [
-        'yle' => ['nimi' => 'Yle', 'url' => 'https://yle.fi/rss/uutiset/tuoreimmat'],
-        'iltasanomat' => ['nimi' => 'Ilta-Sanomat', 'url' => 'https://www.is.fi/rss/tuoreimmat.xml'],
-        'iltalehti' => ['nimi' => 'Iltalehti', 'url' => 'https://www.iltalehti.fi/rss/uutiset.xml'],
-        'kaikki' => ['nimi' => 'Kaikki (High.fi)', 'url' => 'https://high.fi/uutiset/rss']
+        'yle' => 'https://yle.fi/rss/uutiset/tuoreimmat',
+        'is' => 'https://www.is.fi/rss/tuoreimmat.xml',
+        'iltasanomat' => 'https://www.is.fi/rss/tuoreimmat.xml',
+        'iltalehti' => 'https://www.iltalehti.fi/rss/uutiset.xml'
     ];
 
-    $valittu_avain = null;
-    foreach ($rss_lahteet as $avain => $tiedot) {
-        if (str_contains($input, $avain)) {
-            $valittu_avain = $avain;
+    $valittu_url = "";
+    $valittu_nimi = "";
+
+    // 1. Tarkistetaan, haluaako käyttäjä tietyn lähteen
+    foreach ($rss_lahteet as $avain => $url) {
+        if (preg_match("/\b$avain\b/i", $input_clean)) {
+            $valittu_url = $url;
+            $valittu_nimi = ucfirst($avain);
+            // Poistetaan myös lähteen nimi hakusanasta, jos se jäi jäljelle
+            $hakusana = trim(preg_replace("/\b$avain\b/i", '', $hakusana));
             break;
         }
     }
 
-    if ($input === 'uutiset' && !$valittu_avain) {
-        $_SESSION['odottaa_lahdetta'] = true;
-        echo json_encode(['reply' => "Mistä lähteestä haluaisit uutisia? (<b>Yle</b>, <b>IS</b>, <b>Iltalehti</b> tai <b>Kaikki</b>)"]);
-        exit;
+    // Jos hakusana on edelleen olemassa ja se ei ole tyhjä, käytetään Google Newsia
+    if (empty($valittu_url)) {
+        $q = empty($hakusana) ? "Suomi" : $hakusana;
+        $valittu_url = "https://news.google.com/rss/search?q=" . urlencode($q) . "&hl=fi&gl=FI&ceid=FI:fi";
+        $valittu_nimi = ($q === "Suomi") ? "Pääuutiset" : "Haku: " . ucfirst($q);
     }
 
-    // Jos lähdettä ei tunnistettu, käytetään High.fi:tä oletuksena
-    if (!$valittu_avain) $valittu_avain = 'kaikki';
     unset($_SESSION['odottaa_lahdetta']);
 
-    $valittu = $rss_lahteet[$valittu_avain];
-
     // Haetaan RSS-data
-    $ch = curl_init($valittu['url']);
+    $ch = curl_init($valittu_url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
     curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (UutisBotti/1.8)');
@@ -325,28 +360,43 @@ if (str_contains($input, 'uutis') || isset($_SESSION['odottaa_lahdetta'])) {
         $xml = simplexml_load_string($rss_raw, 'SimpleXMLElement', LIBXML_NOCDATA);
         
         if ($xml && isset($xml->channel->item)) {
-            $vastaus = "<b>{$valittu['nimi']} - Tuoreimmat:</b><br><ul style='padding-left:20px; margin-top:10px;'>";
+            $vastaus = "<b>{$valittu_nimi} - Tuoreimmat:</b><br><ul style='padding-left:20px; margin-top:10px;'>";
             
-            for ($i = 0; $i < 5; $i++) {
-                if (!isset($xml->channel->item[$i])) break;
-                
-                $item = $xml->channel->item[$i];
-                $title = (string)$item->title;
+            $count = 0;
+            foreach ($xml->channel->item as $item) {
+                if ($count >= 5) break;
+
+                $full_title = (string)$item->title;
                 $link = (string)$item->link;
+
+                // Siistitään otsikko vain, jos se tulee Google Newsistä (sisältää " - Lähde")
+                if (str_contains($valittu_url, 'google.com')) {
+                    $parts = explode(' - ', $full_title);
+                    $lahde_nimi = (count($parts) > 1) ? array_pop($parts) : "";
+                    $otsikko = implode(' - ', $parts);
+                } else {
+                    $otsikko = $full_title;
+                    $lahde_nimi = $valittu_nimi;
+                }
                 
-                $vastaus .= "<li style='margin-bottom:8px;'><a href='{$link}' target='_blank'>{$title}</a></li>";
+                $vastaus .= "<li style='margin-bottom:10px;'>";
+                $vastaus .= "<a href='{$link}' target='_blank' style='text-decoration:none; font-weight:bold;'>{$otsikko}</a>";
+                if ($lahde_nimi) {
+                    $vastaus .= "<br><small style='color:#888;'>Lähde: {$lahde_nimi}</small>";
+                }
+                $vastaus .= "</li>";
+                $count++;
             }
             $vastaus .= "</ul>";
             echo json_encode(['reply' => $vastaus]);
         } else {
-            echo json_encode(['reply' => "RSS-syötteen lukeminen epäonnistui. XML-muoto on virheellinen. 📰"]);
+            echo json_encode(['reply' => "Syötteen lukeminen epäonnistui lähteestä $valittu_nimi."]);
         }
     } else {
-        echo json_encode(['reply' => "Yhteys uutispalvelimeen epäonnistui. 🌐"]);
+        echo json_encode(['reply' => "Yhteys uutispalveluun epäonnistui. Yritä myöhemmin uudestaan."]);
     }
     exit;
 }
-
 
 // 9. Ohjeet
 if (str_contains($input, 'ohjeet')) {
